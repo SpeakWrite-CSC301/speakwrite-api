@@ -30,7 +30,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 print(f"User said: {user_input}")
 
                 if user_input.lower() in ["exit", "quit"]:
-                    await websocket.send_text("Conversation ended.")
+                    await websocket.send_json({"type":"content", "data":"Conversation ended."})
                     break
 
                 response = None # setting it as none for later error checking
@@ -39,7 +39,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     response, chat_history_ids = await asyncio.to_thread(
                         generate_response, user_input, chat_history_ids
                     )
-                    await websocket.send_text(response)
+                    await websocket.send_json({"type":"content", "data":response})
                 except Exception as gen_error:
 
                     # store error details locally, store response as well if it exists.
@@ -53,7 +53,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     with open(ERROR_LOG_FILE, "a") as f:
                         f.write(error_details)
-                    await websocket.send_text("An error occurred processing your message. It has been logged.")
+                    await websocket.send_json({"type":"content", "data": "An error occurred processing your message. It has been logged."})
             else:
                 # No input detected; wait a moment before trying again.
                 await asyncio.sleep(0.2)
