@@ -8,11 +8,15 @@ Speech Transcription system:
 
 import os
 import speech_recognition as sr
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
 import torch
 
 # avoid logging about parallelism (not sure what it is)
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+# select device
+device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+print(f"Using device: {device}")
 
 # load the Hugging Face model + tokenizer
 
@@ -21,13 +25,14 @@ model_options = [
     "microsoft/DialoGPT-medium",  # SLM with 355M parameters
     "facebook/blenderbot-1B-distill",
     "microsoft/GODEL-v1_1-large-seq2seq",  # knowledge-aware
-    "mistralai/Mistral-7B-Instruct",
+    "mistralai/Mistral-7B-Instruct",  # a better small LLM for rewriting
     "t5-small",  # good for prompt eng
     "google/flan-t5-small",  # instruction-tuned
 ]
-model_name = "microsoft/DialoGPT-medium"
+model_name = "google/flan-t5-large"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
+#model = AutoModelForCausalLM.from_pretrained(model_name)
 
 # initialize Speech Recognizer
 recognizer = sr.Recognizer()
@@ -66,53 +71,23 @@ def generate_response(input_text: str, chat_history_ids=None, tone: str = "frien
     Generate model's response to the input text.
     """
     prompt_templates = {
-        "friendly_casual": """
-    Rewrite the following transcribed text into a set of notes that are friendly and inviting. The style should be relaxed and conversational, using everyday language and a personal touch.
-
-    Ensure to maintain consistency with context and style. 
-
-    Transcribed Text: "{TRANSCRIBED_TEXT}"
-
-    Ensure the final output feels like a friendly conversation rather than a formal report.
-    """,
-
-        "professional": """
-    You are an AI writing assistant. Your task is to convert the following transcription into well-organized, professional notes. The writing should be formal, clear, and polished. Focus on clarity, structure, and a refined tone appropriate for business or academic settings.
-
-    Ensure to maintain consistency with context and style.
-
-    Transcribed Text: "{TRANSCRIBED_TEXT}"
-
-    Output: Professional notes with a balanced and articulate style.
-    """,
-
-        "technical": """
-    Please transform the provided transcription into technical notes that are analytical and methodical. The language should be formal and technical, with a focus on clarity and logical organization. Use technical jargon appropriately to suit the context of the provided text, do not deter from or use ambiguous terms that may confuse the theme of the text.
-
-    Ensure to maintain consistency with context and style.
-
-    Text: "{TRANSCRIBED_TEXT}"
-
-    Ensure that the notes are clear, detailed, and accurately reflect the technical content and context.
-    """,
-
-        "summary_brief": """
-    You are an AI assistant tasked with converting the following transcription into a concise summary. Extract the key points and present them in a brief, clear format. The tone should be succinct, focusing on the most important details without unnecessary elaboration.
-
-    Ensure to maintain consistency with context and style.
-
-    Transcribed Text: "{TRANSCRIBED_TEXT}"
-
-    Output: A set of summarized notes that capture the essential points in a concise manner.
-    """
+    "friendly_casual": "Rewrite this in a friendly, casual tone:\n{TRANSCRIBED_TEXT}",
+    "professional": "Rewrite this into well-organized, professional tone:\n{TRANSCRIBED_TEXT}",
+    "technical": "Convert this into a clear, detailed, technical tone:\n{TRANSCRIBED_TEXT}",
+    "summary_brief": "Summarize the key points from this tone:\n{TRANSCRIBED_TEXT}"
     }
 
+    # add input text to prompt template
     prompt = prompt_templates.get(tone, prompt_templates["friendly_casual"])
     prompt = prompt.format(TRANSCRIBED_TEXT=input_text)
 
-    new_user_input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors='pt')
+    new_user_input_ids = tokenizer.encode(prompt + tokenizer.eos_token, return_tensors='pt').to(device)
     bot_input_ids = torch.cat([chat_history_ids, new_user_input_ids], dim=-1) if chat_history_ids is not None else new_user_input_ids
-    chat_history_ids = model.generate(bot_input_ids, max_length=1000, pad_token_id=tokenizer.eos_token_id)
+    chat_history_ids = model.generate(
+        bot_input_ids, 
+        max_length=min(500, bot_input_ids.shape[-1] + 100),
+        pad_token_id=tokenizer.eos_token_id
+    )
     response = tokenizer.decode(chat_history_ids[:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
     return response, chat_history_ids
 
@@ -133,7 +108,7 @@ def main():
                 break
 
             # generate and print the model's response
-            response, chat_history_ids = generate_response(user_input, chat_history_ids, tone="professional")
+            response, chat_history_ids = generate_response(user_input, chat_history_ids, tone="friendly_casual")
             print(f"Model: {response}")
 
 if __name__ == "__main__":
