@@ -24,4 +24,3 @@ class Chat(BaseModel):
     session_id: int
     sender: str
     message: str
-    
