@@ -1,14 +1,13 @@
-import os
+import uvicorn
 import traceback
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-import uvicorn
 
 # calling methods/functiona from speech_transcription.py
 from speech_transcription import recognize_speech, generate_response
 
-app = FastAPI()
-ERROR_LOG_FILE = "error_log.txt"
+app = FastAPI() # create a seperate WebSocket service
+ERROR_LOG_FILE = "error.log"
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -72,3 +71,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     uvicorn.run("websocket:app", host="0.0.0.0", port=8000, reload=True)
+    
