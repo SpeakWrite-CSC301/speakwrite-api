@@ -17,3 +17,10 @@ def create_session(session: Session):
     if response.status_code != 200:
         return {"error": "DB SERVICE ERROR: Failed to create session."}
     return response.json()
+
+@router.patch("/sessions/{session_id}", tags=["sessions"])
+def update_session_name(session_id: int, new_session_data: dict):
+    response = requests.patch(f"{DB_SERVICE_URL}/sessions/{session_id}", json=new_session_data)
+    if response.status_code != 200:
+        return {"error": "DB SERVICE ERROR: Failed to update session."}
+    return response.json()
