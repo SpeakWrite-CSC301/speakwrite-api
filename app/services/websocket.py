@@ -3,8 +3,9 @@ import traceback
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-# calling methods/functiona from speech_transcription.py
-from speech_transcription import recognize_speech, generate_response
+# import the speech transcription function and Mistral response generator.
+from speech_transcription import recognize_speech
+from app.services.mistral_inference import generate_mistral_response
 
 app = FastAPI() # create a seperate WebSocket service
 ERROR_LOG_FILE = "error.log"
@@ -19,34 +20,36 @@ async def websocket_endpoint(websocket: WebSocket):
     and error details to a local file.
     """
     await websocket.accept()
-    chat_history_ids = None  
+    # Use an initial chat history (could be an empty string)
+    chat_history = ""
     
     try:
         while True:
-            user_input = await websocket.receive_text() # user input now points to incoming transcription from WebSocket client
-            # Run the speech recognition in a separate thread, so it doesn't block.
-            # user_input = await asyncio.to_thread(recognize_speech)
+            # Get speech input in a separate thread.
+            user_input = await asyncio.to_thread(recognize_speech)
             if user_input:
-                print(f"User said: {user_input}")
+                print(f"Recognized speech: {user_input}")
 
                 if user_input.lower() in ["exit", "quit"]:
                     await websocket.send_json({"type":"content", "data":"Conversation ended."})
                     break
 
-                response = None # setting it as none for later error checking
                 try:
-                    # Generate AI response in a separate thread.
-                    response, chat_history_ids = await asyncio.to_thread(
-                        generate_response, user_input, chat_history_ids
+                    # Generate the Mistral response based on current chat history and recognized speech.
+                    updated_chat_history = await asyncio.to_thread(
+                        generate_mistral_response, chat_history, user_input
                     )
-                    await websocket.send_json({"type":"content", "data":response})
+                    # Update the active chat history with the new result.
+                    chat_history = updated_chat_history
+                    
+                    await websocket.send_json({"type":"content", "data": updated_chat_history})
                 except Exception as gen_error:
 
                     # store error details locally, store response as well if it exists.
                     error_details = (
                         f"Error processing input:\n"
                         f"Input: {user_input}\n"
-                        f"Response: {response if response is not None else 'None'}\n"
+                        f"Response: None"
                         f"Error: {str(gen_error)}\n"
                         f"Traceback: {traceback.format_exc()}\n"
                         "-----------------------------\n"
