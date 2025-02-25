@@ -5,7 +5,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 # import the speech transcription function and Mistral response generator.
 from speech_transcription import recognize_speech
-from app.services.mistral_inference import generate_mistral_response
+from mistral_inference import generate_mistral_response
 
 app = FastAPI() # create a seperate WebSocket service
 ERROR_LOG_FILE = "error.log"
