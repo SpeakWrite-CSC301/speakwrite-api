@@ -59,7 +59,7 @@ def generate_mistral_response(chat_history: str, user_prompt: str, tone: str = "
     Return the resultant chat history of performing user_prompt on chat_history
     """
     formatted_prompt = apply_prompt_template(chat_history, user_prompt, tone)
-    return call_llm(llm_client, prompt)
+    return call_llm(llm_client, formatted_prompt)
 
 
 if __name__ == '__main__':
