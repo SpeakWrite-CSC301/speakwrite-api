@@ -22,11 +22,12 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     # Use an initial chat history (could be an empty string)
     chat_history = ""
-    
+
     try:
         while True:
             # Get speech input in a separate thread.
-            user_input = await asyncio.to_thread(recognize_speech)
+            user_input = await websocket.receive_text()
+            # user_input = await asyncio.to_thread(recognize_speech)
             if user_input:
                 print(f"Recognized speech: {user_input}")
 
@@ -41,7 +42,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     # Update the active chat history with the new result.
                     chat_history = updated_chat_history
-                    
+
                     await websocket.send_json({"type":"content", "data": updated_chat_history})
                 except Exception as gen_error:
 
