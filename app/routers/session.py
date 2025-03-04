@@ -31,3 +31,10 @@ def update_session(session_id: int, new_session_data: dict):
     if response.status_code != 200:
         return {"error": "DB SERVICE ERROR: Failed to update session."}
     return response.json()
+
+@router.delete("/sessions/{session_id}", tags=["sessions"])
+def delete_session(session_id: int):
+    response = requests.delete(f"{DB_SERVICE_URL}/sessions/{session_id}")
+    if response.status_code != 200:
+       return {"error": "DB SERVICE ERROR: Failed to delete session."}
+    return response.json()
