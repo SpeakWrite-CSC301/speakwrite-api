@@ -26,7 +26,9 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             # Get speech input in a separate thread.
-            user_input = await websocket.receive_text()
+            data = await websocket.receive_json()
+            user_input = data.get("content", "")
+            user_tone = data.get("tone", "")
             # user_input = await asyncio.to_thread(recognize_speech)
             if user_input:
                 print(f"Recognized speech: {user_input}")
