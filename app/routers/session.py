@@ -21,6 +21,7 @@ def read_sessions(current_user: int = Depends(get_current_user)): # Gets all ses
 def read_session(session_id: int, current_user: int = Depends(get_current_user)): # Gets session matching the given session_id
     response = None
     if current_user:
+        print(f"{DB_SERVICE_URL}/sessions/{session_id}?user_id={current_user}")
         response = requests.get(f"{DB_SERVICE_URL}/sessions/{session_id}?user_id={current_user}")
     else:
         response = requests.get(f"{DB_SERVICE_URL}/sessions/{session_id}")
