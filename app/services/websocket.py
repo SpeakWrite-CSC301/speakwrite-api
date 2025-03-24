@@ -40,7 +40,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 try:
                     # Generate the Mistral response based on current chat history and recognized speech.
                     updated_chat_history = await asyncio.to_thread(
-                        generate_mistral_response, chat_history, user_input
+                        generate_mistral_response, chat_history, user_input, user_tone
                     )
                     # Update the active chat history with the new result.
                     chat_history = updated_chat_history

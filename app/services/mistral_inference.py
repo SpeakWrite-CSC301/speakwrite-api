@@ -30,27 +30,41 @@ def call_llm(inference_client: InferenceClient, prompt: str):
 def apply_prompt_template(
         chat_history: str,
         user_prompt: str, 
-        tone: str = "casual"  # not used yet
+        tone: str = "friendly"  # default tone changed to "friendly"
     ) -> str:
     """
     Convert a raw user prompt into a format that encourages the LLM to 
     consider chat_history and tone when generating its response.
     """
     
-    # Mistral instruction format
-    mistral_prompt_template = """
+    # Base Mistral instruction format
+    base_template = """
     [INST] 
     You are a helpful assistant. Your task is to perform the user_prompt on chat_history if it is a command, otherwise just append it:
     chat_history: {CHAT_HISTORY}
     user_prompt: {COMMAND}
-    Just return the new chat_history without explanations:
+    {TONE_INSTRUCTION}
+    Just return the new chat_history without explanations, do not edit too much of the earlier chat_history:
     [/INST]
     """.strip()
-
-    # request response in specified tone
-    #prompt = f"{user_prompt} Rewrite in a {tone} tone."
     
-    # insert into Mistral template
+    # Tone-specific instructions
+    tone_instructions = {
+        "friendly": "Rewrite the following transcribed text into a set of notes that are friendly and inviting. The style should be relaxed and conversational, using everyday language and a personal touch. Ensure to maintain consistency with context and style. Ensure the final output feels like a friendly conversation rather than a formal report. ",
+        "professional": "You are an AI writing assistant. Your task is to convert the following transcription into well-organized, professional notes. The writing should be formal, clear, and polished. Focus on clarity, structure, and a refined tone appropriate for business or academic settings. Ensure to maintain consistency with context and style. Output: Professional notes with a balanced and articulate style.",
+        "technical": "Please transform the provided transcription into technical notes that are analytical and methodical. The language should be formal and technical, with a focus on clarity and logical organization. Use technical jargon appropriately to suit the context of the provided text, do not deter from or use ambiguous terms that may confuse the theme of the text. Ensure to maintain consistency with context and style. Ensure that the notes are clear, detailed, and accurately reflect the technical content and context.",
+        "Summary": "You are an AI assistant tasked with converting the following transcription into a concise summary. Extract the key points and present them in a brief, clear format. The tone should be succinct, focusing on the most important details without unnecessary elaboration. Ensure to maintain consistency with context and style. Output: A set of summarized notes that capture the essential points in a concise manner."
+    }
+    
+    # Get the appropriate tone instruction or use default if not found
+    tone_instruction = tone_instructions.get(tone.lower(), tone_instructions["friendly"])
+    
+    # Insert into template
+    return base_template.format(
+        CHAT_HISTORY=chat_history, 
+        COMMAND=user_prompt, 
+        TONE_INSTRUCTION=f"Use the following tone: {tone_instruction}"
+    )
     return mistral_prompt_template.format(CHAT_HISTORY=chat_history, COMMAND=user_prompt)
 
 
