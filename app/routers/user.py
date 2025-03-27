@@ -49,7 +49,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 def create_user(user: User):
   response = requests.post(f"{DB_SERVICE_URL}/users", json=user.model_dump())
   if response.status_code != 200:
-    return {"error": "DB SERVICE ERROR: Failed to create user"}
+    raise HTTPException(status_code=400, detail="Email already registered")
   user_data = response.json()
   access_token = create_access_token(data={"sub": str(user_data["id"])}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
   print(access_token)
