@@ -14,7 +14,7 @@ class User(BaseModel):
 class Session(BaseModel):
     session_id: Optional[int] = None
     session_name: str
-    user_id: int
+    # user_id: int
     context: dict = {}
 
     # class Config:
