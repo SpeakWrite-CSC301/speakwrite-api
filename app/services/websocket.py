@@ -4,7 +4,7 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 # import the speech transcription function and Mistral response generator.
-from speech_transcription import recognize_speech
+from summarizer import classify_input
 from mistral_inference import generate_mistral_response
 
 app = FastAPI() # create a seperate WebSocket service
@@ -26,6 +26,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             # Get speech input in a separate thread.
+            # user_input = await websocket.receive_text()
             data = await websocket.receive_json()
             user_input = data.get("content", "")
             user_tone = data.get("tone", "")
@@ -40,7 +41,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 try:
                     # Generate the Mistral response based on current chat history and recognized speech.
                     updated_chat_history = await asyncio.to_thread(
-                        generate_mistral_response, chat_history, user_input, user_tone
+                        classify_input, chat_history, user_input, user_tone
                     )
                     # Update the active chat history with the new result.
                     chat_history = updated_chat_history
