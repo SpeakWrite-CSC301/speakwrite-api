@@ -25,7 +25,7 @@ genai.configure(api_key=gemini_key)  # Replace with your actual API key
 model = genai.GenerativeModel('gemini-2.0-flash')
 
 
-def transcribe_speech(user_input, file_content, tone):
+def transcribe_speech(user_input, chat_history, tone):
     tone_instructions = {
         "friendly": {
             "description": "warm, conversational, and approachable",
@@ -39,7 +39,7 @@ def transcribe_speech(user_input, file_content, tone):
         },
         "technical": {
             "description": "analytical, detailed, and methodical",
-            "style_guide": "Use domain-specific terminology, logical structure, and precise descriptions. Include relevant technical details. You may use bullet points and similar strucutres if needed.",
+            "style_guide": "Use domain-specific terminology, logical structure, and precise descriptions. Include relevant technical details. You may use bullet points and similar structures if needed.",
             "example": "The system architecture implements a three-tier model with the following components:"
         },
         "summary": {
@@ -53,74 +53,119 @@ def transcribe_speech(user_input, file_content, tone):
     tone_description = tone_data.get("description", "No specific tone description available.")
     tone_style_guide = tone_data.get("style_guide", "No specific style guide available.")
     tone_example = tone_data.get("example", "No example available.")
-    prompt = (
-        "You are a transcription assistant. Transcribe the incoming user input in a refined manner, ignoring natural mistakes such as 'sorry' or 'uh' or 'hmm' and "
-        "append it to the File content provided below, returning the updated text with no commentary. If you don't hear any speech, then return an empty string.\n\n"
+
+    system_message = (
+        "You are a smart transcription assistant. Transcribe the incoming user input in a refined manner, ignoring natural mistakes such as 'sorry' or 'uh' or 'hmm' "
+        "and append it to the chat history provided below, returning the updated chat history with no commentary. If you don't hear any speech, then return an empty string.\n\n"
         "Follow the following tone guidelines when transcribing new text or making any changes:\n"
         f"Selected tone: {tone}\n"
         f"Tone description: {tone_description}\n"
         f"Style guide: {tone_style_guide}\n"
         f"Example: {tone_example}\n\n"
-        "File content: " + file_content
+        "Chat history: " + chat_history
     )
+
     try:
         response = model.generate_content([
-            f"User input: {user_input}",
-            prompt
+            {"role": "system", "text": system_message},
+            {"role": "user", "text": f"User input: {user_input}"}
         ])
         return response.text.strip()
     except Exception as e:
         print(f"Transcription error: {e}")
-        return file_content
+        return chat_history
 
 
-def execute_command(user_input, file_content):
+def execute_command(user_input, chat_history, max_chat_len = 1_000):
+    system_message = (
+        "You are a smart text-editing assistant. If the User input is a text-editing command, apply it to the chat history provided "
+        "and return the updated chat history after performing the command (with no explanations and no commentary). If the command is not possible, leave the chat history as is."
+    )
+
     payload = {
         "contents": [
-            {
-                "role": "USER",
-                "parts": [
-                    { "text": f"User input: {user_input}" },
-                    { "text":  "Instruction: You are an advanced text-editing assistant. If the User input is a text-editing command, apply it to the File content provided below and return the updated text (with no explanations and no commentary). If the command is not possible, leave the file content as is.\n\n" }, 
-                    { "text": f"File content: {file_content}" }
-                ]
-                    
-            }
+            {"role": "system", "parts": [{"text": system_message}]},
+            {"role": "user", "parts": [
+                {"text": f"User input: {user_input}"},
+                {"text": f"Chat history: {chat_history}"}
+            ]}
         ],
         "generation_config": {
-            "temperature":1,
+            "temperature": 1,
             "topP": 0.5,
             "topK": 3,
-            "maxOutputTokens": 100
+            "maxOutputTokens": max_chat_len
         }
     }
+
     try:
         response = requests.post(url, headers=headers, json=payload)
         response_json = response.json()
-        print(response_json)
         return response_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "No response").strip()
     except Exception as e:
-        print(f"Transcription error: {e}")
-        return file_content
+        print(f"Execution error: {e}")
+        return chat_history
 
 
-def classify_input(chat_history, user_input, tone = "friendly"):
-    """Sends audio to Gemini and returns the text response."""
+def classify_input(chat_history, user_input, tone="friendly"):
+    """
+    Sends audio to Gemini and returns the text response.
+    """
+
+    # OLD SYS PROMPT
+    """
+    system_message = (
+        "System: Your task is to classify user input into either 'command' or 'speech'. "
+        "Return only one word: 'command' if it is a text-editing command, or 'speech' if it is normal speech."
+    )
+    """
+    # NEW SYS PROMPT
+    system_message = "Classify the user input as [speech, command]. Only return the word representing the classification."
+
+    # classify the user's request as speech to transcribe, or a command to execute
     try:
         response = model.generate_content([
-            f"User input: {user_input}"
-            "Determine if the following user input is a text-editing command or normal speech. Return only one word: 'command' if it is a text-editing command, or 'speech' if it is normal speech.",
+            {"role": "system", "text": system_message},
+            {"role": "user", "text": f"User input: {user_input}"}
         ])
         classification = response.text.lower().strip()
     except Exception as e:
         print(f"Classification error: {e}")
         classification = "speech"  # default to speech if something goes wrong
-    
+
     if classification == "command":
         chat_history = execute_command(user_input, chat_history)
     elif classification == "speech":
-        chat_history += " " + transcribe_speech(user_input, chat_history, tone = "friendly")
-    
+        chat_history += " " + transcribe_speech(user_input, chat_history, tone)
+
     return chat_history
 
 
+if __name__ == "__main__":
+    # exemplar lecture script on 3D videogame development
+    chat_history = (
+        # starts with well-flowing sentences and points
+
+        "Welcome everyone to today’s lecture on 3D videogame development. In this session, "
+        "we will explore the fundamental concepts that are essential for creating immersive, interactive 3D worlds. "
+        "We will begin by discussing the basics of 3D modeling, including the creation of meshes, textures, and materials. "
+        "These elements form the visual foundation of any 3D game, and understanding them is crucial for effective design. "
+        "Next, we will examine the principles of animation, which bring these static models to life. "
+        "Through keyframing and skeletal rigging, characters and objects are animated to interact with the game environment in realistic ways. "
+        "We will also dive into the physics engines that simulate realistic motion and collisions, creating a believable world for the players. "
+        "The integration of artificial intelligence in NPC behavior and dynamic world events will be highlighted as well, showcasing the interplay between programming and creativity. "
+        "Furthermore, we will cover game engines such as Unity and Unreal Engine, exploring how they streamline development through built-in tools and asset libraries. "
+        "By understanding the core architecture of these engines, developers can harness their power to build games more efficiently and creatively. "
+        "We will discuss optimization techniques that ensure games run smoothly on various hardware platforms and examine common pitfalls and debugging strategies. "
+        "As we move toward the end of the lecture, consider how these concepts interrelate to form a complete development pipeline. "
+        "Game development pipelines are complex. They require integration of various modules. Some parts need coordination. "
+        
+        # very rough notes start here
+
+        "Systems fail without understanding. Code errors make issues worse. Projects face deadlines badly. "
+        "Graphics, physics, and AI mix badly. NVIDIA has made some progress though. Problems like feedback loops not connecting properly. Tools work like broken bridges. "
+        "Procedures end abruptly. Design notes float, disconnected. Errors and fixes mix with unsteady thoughts."
+    )
+    
+    user_input = "Please refine and improve the flow of the sentences in the last paragraph."
+    print(f"\nNEW CHAT HISTORY:\n\n{classify_input(chat_history, user_input)}")
