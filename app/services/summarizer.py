@@ -9,7 +9,7 @@ project_id = os.getenv("PROJECT_ID")
 endpoint_id = os.getenv("ENDPOINT_ID")
 
 
-url = f"https://{model_region}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{model_region}/endpoints/{endpoint_id}:generateContent"
+trained_model_url = f"https://{model_region}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{model_region}/endpoints/{endpoint_id}:generateContent"
 
 headers = {
     "Authorization": f"Bearer {access_token}",
@@ -21,12 +21,37 @@ headers = {
 gemini_key = os.getenv("GEMINI_KEY")
 genai.configure(api_key=gemini_key)  # Replace with your actual API key
 
-# Model Selection
-model = genai.GenerativeModel('gemini-2.0-flash')
+# SPEECH REFINEMENT model
+speech_refinement_instructions = (
+    "You are a smart note-taking assistant. Rewrite the incoming user input in a refined manner, ignoring natural mistakes and filler words, like 'sorry', 'uh' or 'hmm'. You may paraphrase the text slightly, but make sure it maintains the intended meaning and relevant word choices."
+    "Append the refined text to the total text provided, returning the updated total text  with no commentary. You may append it as a new sentence, or attach it to the previous sentence if it seems appropriate. If you don't hear any speech, then return an empty string. The user input will include tone and style guidelines."
+)
+speech_refine_model = genai.GenerativeModel(
+    'gemini-2.0-flash',
+    system_instructions = speech_refinement_instructions
+)
 
 
-def transcribe_speech(user_input, chat_history, tone):
+# COMMAND CLASSIFICATION model
+cmd_classification_instructions = "Classify the user input as [speech, command]. Only return the exact lowercase word representing the classification."
+cmd_classification_model = genai.GenerativeModel(
+    'gemini-2.0-flash',
+    system_instructions = cmd_classification_instructions
+)
+
+def transcribe_speech(user_input, chat_history, tone = "normal"):
+    """
+    Clean the user's speech and append it to the chat history. Paraphrase the speech
+    into the tone, if specified.
+
+    Precondition: user_input represents speech to be transcribed, and not a command.
+    """
     tone_instructions = {
+        "normal": {
+            "description": "exact, refined, and definite",
+            "style_guide": "Exactly what the user said, but without filler words",
+            "example": "I have put together some notes about the project we discussed."
+        },
         "friendly": {
             "description": "warm, conversational, and approachable",
             "style_guide": "Use casual language, contractions, and a personal touch. Write as if speaking to a friend.",
@@ -49,26 +74,21 @@ def transcribe_speech(user_input, chat_history, tone):
         }
     }
 
+    # rectify unrecognized tones
     tone_data = tone_instructions.get(tone, {})
-    tone_description = tone_data.get("description", "No specific tone description available.")
-    tone_style_guide = tone_data.get("style_guide", "No specific style guide available.")
-    tone_example = tone_data.get("example", "No example available.")
-
-    system_message = (
-        "You are a smart transcription assistant. Transcribe the incoming user input in a refined manner, ignoring natural mistakes such as 'sorry' or 'uh' or 'hmm' "
-        "and append it to the chat history provided below, returning the updated chat history with no commentary. If you don't hear any speech, then return an empty string.\n\n"
-        "Follow the following tone guidelines when transcribing new text or making any changes:\n"
-        f"Selected tone: {tone}\n"
-        f"Tone description: {tone_description}\n"
-        f"Style guide: {tone_style_guide}\n"
-        f"Example: {tone_example}\n\n"
-        "Chat history: " + chat_history
-    )
+    tone_description = tone_data.get("description", "None")
+    tone_style_guide = tone_data.get("style_guide", "None")
+    tone_example = tone_data.get("example", "None")
 
     try:
-        response = model.generate_content([
-            {"role": "system", "text": system_message},
-            {"role": "user", "text": f"User input: {user_input}"}
+        response = speech_refine_model.generate_content([
+            f"Total text: {chat_history}",
+            f"User input: {user_input}",
+            "Adhere to the following tone guidelines when transcribing new text or making any changes:\n"
+            f"Selected tone: {tone}\n"
+            f"Tone description: {tone_description}\n"
+            f"Style guide: {tone_style_guide}\n"
+            f"Example: {tone_example}\n\n"  # example to enable few-shot learning
         ])
         return response.text.strip()
     except Exception as e:
@@ -83,8 +103,8 @@ def execute_command(user_input, chat_history, max_chat_len = 1_000):
     )
 
     payload = {
+        "systemInstruction": {"role": "system", "parts": [{"text": system_message}]},
         "contents": [
-            {"role": "system", "parts": [{"text": system_message}]},
             {"role": "user", "parts": [
                 {"text": f"User input: {user_input}"},
                 {"text": f"Chat history: {chat_history}"}
@@ -99,7 +119,7 @@ def execute_command(user_input, chat_history, max_chat_len = 1_000):
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(trained_model_url, headers=headers, json=payload)
         response_json = response.json()
         return response_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "No response").strip()
     except Exception as e:
@@ -107,26 +127,13 @@ def execute_command(user_input, chat_history, max_chat_len = 1_000):
         return chat_history
 
 
-def classify_input(chat_history, user_input, tone="friendly"):
+def classify_input(chat_history, user_input, tone="normal"):
     """
     Sends audio to Gemini and returns the text response.
     """
-
-    # OLD SYS PROMPT
-    """
-    system_message = (
-        "System: Your task is to classify user input into either 'command' or 'speech'. "
-        "Return only one word: 'command' if it is a text-editing command, or 'speech' if it is normal speech."
-    )
-    """
-    # NEW SYS PROMPT
-    system_message = "Classify the user input as [speech, command]. Only return the word representing the classification."
-
-    # classify the user's request as speech to transcribe, or a command to execute
     try:
-        response = model.generate_content([
-            {"role": "system", "text": system_message},
-            {"role": "user", "text": f"User input: {user_input}"}
+        response = cmd_classification_model.generate_content([
+            f"User input: {user_input}"
         ])
         classification = response.text.lower().strip()
     except Exception as e:
