@@ -23,12 +23,12 @@ genai.configure(api_key=gemini_key)  # Replace with your actual API key
 
 # SPEECH REFINEMENT model
 speech_refinement_instructions = (
-    "You are a smart note-taking assistant. Rewrite the incoming user input in a refined manner, ignoring natural mistakes and filler words, like 'sorry', 'uh' or 'hmm'. You may paraphrase the text slightly, but make sure it maintains the intended meaning and relevant word choices."
-    "Append the refined text to the total text provided, returning the updated total text  with no commentary. You may append it as a new sentence, or attach it to the previous sentence if it seems appropriate. If you don't hear any speech, then return an empty string. The user input will include tone and style guidelines."
+    "You are a smart note-taking assistant. Rewrite the incoming user input in a refined manner, ignoring natural mistakes and filler words, like 'sorry', 'uh' or 'hmm'. You may paraphrase the text slightly, but make sure it maintains the intended meaning and relevant word choices. "
+    "Your job is to append the refined text to the total text provided, returning the updated total text with no commentary. You may append it as a new sentence, or attach it to the previous sentence if it seems appropriate. If you don't hear any speech, then return an empty string. The user input will include tone and style guidelines."
 )
 speech_refine_model = genai.GenerativeModel(
     'gemini-2.0-flash',
-    system_instructions = speech_refinement_instructions
+    system_instruction = speech_refinement_instructions
 )
 
 
@@ -36,7 +36,7 @@ speech_refine_model = genai.GenerativeModel(
 cmd_classification_instructions = "Classify the user input as [speech, command]. Only return the exact lowercase word representing the classification."
 cmd_classification_model = genai.GenerativeModel(
     'gemini-2.0-flash',
-    system_instructions = cmd_classification_instructions
+    system_instruction = cmd_classification_instructions
 )
 
 def transcribe_speech(user_input, chat_history, tone = "normal"):
@@ -96,7 +96,7 @@ def transcribe_speech(user_input, chat_history, tone = "normal"):
         return chat_history
 
 
-def execute_command(user_input, chat_history, max_chat_len = 1_000):
+def execute_command(user_input, chat_history, max_chat_len = 5_000):
     system_message = (
         "You are a smart text-editing assistant. If the User input is a text-editing command, apply it to the chat history provided "
         "and return the updated chat history after performing the command (with no explanations and no commentary). If the command is not possible, leave the chat history as is."
@@ -150,6 +150,7 @@ def classify_input(chat_history, user_input, tone="normal"):
 
 if __name__ == "__main__":
     # exemplar lecture script on 3D videogame development
+    """
     chat_history = (
         # starts with well-flowing sentences and points
 
@@ -173,6 +174,12 @@ if __name__ == "__main__":
         "Graphics, physics, and AI mix badly. NVIDIA has made some progress though. Problems like feedback loops not connecting properly. Tools work like broken bridges. "
         "Procedures end abruptly. Design notes float, disconnected. Errors and fixes mix with unsteady thoughts."
     )
+    """
+    chat_history = (
+        "Systems fail without understanding. Code errors make issues worse. Projects face deadlines badly. "
+        "Graphics, physics, and AI mix badly. NVIDIA has made some progress though. Problems like feedback loops not connecting properly. Tools work like broken bridges. "
+        "Procedures end abruptly. Design notes float, disconnected. Errors and fixes mix with unsteady thoughts."
+    )
     
-    user_input = "Please refine and improve the flow of the sentences in the last paragraph."
+    user_input = "Improve the flow of these sentences"
     print(f"\nNEW CHAT HISTORY:\n\n{classify_input(chat_history, user_input)}")
