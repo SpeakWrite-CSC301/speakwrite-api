@@ -30,7 +30,8 @@ ERROR_LOG_FILE = "error.log"
 
 chat_history = ""
 
-@app.websocket("/ws")
+# @app.websocket("/ws") for local use
+@app.websocket("/websockets/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint that continuously listens to microphone input,
