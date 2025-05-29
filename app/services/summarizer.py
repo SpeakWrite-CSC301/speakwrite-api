@@ -1,6 +1,8 @@
 import os
 import google.generativeai as genai
 import requests
+import google.auth
+from google.auth.transport.requests import Request
 
 # Replace with your actual access token
 access_token = os.getenv("GCLOUD_ACCESS_TOKEN")
@@ -8,11 +10,13 @@ model_region = os.getenv("TRAINED_MODEL_LOCATION")
 project_id = os.getenv("PROJECT_ID")
 endpoint_id = os.getenv("ENDPOINT_ID")
 
-
+credentials = google.auth.default()[0]
+credentials.refresh(Request())
+# print(credentials.token)
 url = f"https://{model_region}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{model_region}/endpoints/{endpoint_id}:generateContent"
 
 headers = {
-    "Authorization": f"Bearer {access_token}",
+    "Authorization": f"Bearer {credentials.token}",
     "Content-Type": "application/json; charset=utf-8"
 }
 
@@ -91,7 +95,7 @@ def execute_command(user_input, file_content):
             "temperature":1,
             "topP": 0.5,
             "topK": 3,
-            "maxOutputTokens": 100
+            "maxOutputTokens": 1000
         }
     }
     try:
